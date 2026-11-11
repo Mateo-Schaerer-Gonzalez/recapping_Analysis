@@ -5,8 +5,8 @@ Run inside the `wax-cells` env:   python make_strips.py
 Writes   strips/train/<name>.png + <name>_masks.tif     (to label and train on)
          strips/test/<name>.png  + <name>_masks.tif     (HELD OUT: label them, never train on them)
 
-Pre-labels = plain out-of-the-box Cellpose predictions (no filtering).  Re-running OVERWRITES the
-_masks.tif files (move any `_seg.npy` you want to keep out of the way first).
+Pre-labels = Cellpose predictions from MODEL (no filtering).  Re-running overwrites the _masks.tif files
+but skips any strip that already has a corrected `_seg.npy`.
 """
 import glob
 import os
@@ -28,6 +28,7 @@ STRIPS = {
 }
 # held out for testing: one dark strip, one light strip
 TEST = {(0, 3), (1, 3)}        # (page, strip number 1-4)
+MODEL = 'models/wax_cpsam'     # fine-tuned model for the pre-labels; None = out-of-the-box cpsam_v2
 CROP_DIR = 'training'
 
 
@@ -51,11 +52,14 @@ def main():
     for page, boxes in STRIPS.items():
         print(f'page {page}: running Cellpose ...', flush=True)
         img = cd.load_page(PDF, page=page, dpi=200)
-        lab = cd.segment(img).astype(np.int32)
+        lab = cd.segment(img, model=MODEL).astype(np.int32)
         for s, (x0, y0, x1, y1) in enumerate(boxes, 1):
             split = 'test' if (page, s) in TEST else 'train'
             name = strip_name(page, s)
             path = os.path.join('strips', split, name)
+            if os.path.exists(path + '_seg.npy'):
+                print('  keep (already corrected):', path)
+                continue
             y1, x1 = min(y1, img.shape[0]), min(x1, img.shape[1])
             l = lab[y0:y1, x0:x1]
             ids = np.unique(l[l > 0])
