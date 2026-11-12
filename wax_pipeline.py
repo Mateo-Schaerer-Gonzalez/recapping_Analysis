@@ -177,6 +177,8 @@ def colab_main(pdfs, model_path='/content/drive/MyDrive/wax_cpsam', out_root='/c
         df.insert(0, 'file', stem)
         results.append(df)
     counts = pd.concat(results, ignore_index=True)
+    counts = pd.DataFrame({'PDF': counts['file'], 'Page': counts['page'] + 1, 'Slide': counts['strip'],
+                           'Cells': counts['n_cells']})                    # summary table only: no area stats
     counts.to_csv(os.path.join(out_root, 'all_counts.csv'), index=False)
 
     zip_path = shutil.make_archive(out_root, 'zip', out_root)
