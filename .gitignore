@@ -3,3 +3,4 @@ models/
 backup_labels/
 __pycache__/
 .ipynb_checkpoints/
+results/

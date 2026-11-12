@@ -6,6 +6,7 @@ opencv-python
 pymupdf
 ipykernel
 tifffile
+pandas
 cellpose[gui]
 PyQt6==6.7.1      # newer PyQt6 fails to load on this env's MSVC runtime
 PyQt6-Qt6==6.7.3
