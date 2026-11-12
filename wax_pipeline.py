@@ -128,6 +128,18 @@ def collect_pdfs(uploader=None, in_dir='/content/input', drive_dir='/content/dri
             f.write(bytes(d['content']))
     pdfs = sorted(glob.glob(os.path.join(in_dir, '*.pdf'))) or sorted(glob.glob('/content/*.pdf'))
     if not pdfs:
+        # widget value did not arrive (common in Colab): use Colab's native upload dialog
+        try:
+            from google.colab import files
+            print('Widget upload not received - choose the PDF(s) in the dialog below:')
+            for name, content in files.upload().items():
+                if name.lower().endswith('.pdf'):
+                    with open(os.path.join(in_dir, name), 'wb') as f:
+                        f.write(content)
+            pdfs = sorted(glob.glob(os.path.join(in_dir, '*.pdf')))
+        except Exception as e:
+            print('native upload failed:', e)
+    if not pdfs:
         from google.colab import drive
         if not os.path.exists('/content/drive/MyDrive'):
             drive.mount('/content/drive')
