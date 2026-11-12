@@ -114,6 +114,69 @@ def run_pdf(path, out_dir='results', model=None, dpi=200, gpu=True, show=None):
     return df
 
 
+# ---------------------------------------------------------------- Colab entry point
+def collect_pdfs(uploader=None, in_dir='/content/input', drive_dir='/content/drive/MyDrive/wax_scans'):
+    """Save the PDFs picked in the ipywidgets FileUpload `uploader` to in_dir and return their paths.
+    Falls back to PDFs in /content, then in the Drive folder drive_dir."""
+    import glob
+    os.makedirs(in_dir, exist_ok=True)
+    val = uploader.value if uploader is not None else ()
+    # ipywidgets 7: {name: {content,...}}   ipywidgets 8: ({name, content, ...}, ...)
+    items = list(val.items()) if isinstance(val, dict) else [(d['name'], d) for d in val]
+    for name, d in items:
+        with open(os.path.join(in_dir, name), 'wb') as f:
+            f.write(bytes(d['content']))
+    pdfs = sorted(glob.glob(os.path.join(in_dir, '*.pdf'))) or sorted(glob.glob('/content/*.pdf'))
+    if not pdfs:
+        from google.colab import drive
+        if not os.path.exists('/content/drive/MyDrive'):
+            drive.mount('/content/drive')
+        pdfs = sorted(glob.glob(os.path.join(drive_dir, '*.pdf')))
+    print(len(pdfs), 'PDF(s):', [os.path.basename(p) for p in pdfs])
+    assert pdfs, 'No PDFs: click Upload above and wait for the file name to appear (or put PDFs in %s)' % drive_dir
+    return pdfs
+
+
+def colab_main(pdfs, model_path='/content/drive/MyDrive/wax_cpsam', out_root='/content/results'):
+    """Everything after the upload, for Google Colab: model from Drive -> pipeline on each PDF -> show -> zip -> download."""
+    import shutil
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import torch
+    print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE - enable a GPU runtime')
+
+    model = None
+    try:
+        from google.colab import drive
+        if not os.path.exists('/content/drive/MyDrive'):
+            drive.mount('/content/drive')
+        model = model_path if os.path.exists(model_path) else None
+    except Exception:
+        pass
+    print('model:', model or 'generic cpsam_v2 (fine-tuned model not found at %s!)' % model_path)
+
+    def show(name, overlay):
+        plt.figure(figsize=(12, 6)); plt.imshow(overlay[..., ::-1]); plt.axis('off'); plt.title(name); plt.show()
+
+    results = []
+    for pdf in pdfs:
+        stem = os.path.splitext(os.path.basename(pdf))[0]
+        df = run_pdf(pdf, out_dir=os.path.join(out_root, stem), model=model, show=show)
+        df.insert(0, 'file', stem)
+        results.append(df)
+    counts = pd.concat(results, ignore_index=True)
+    counts.to_csv(os.path.join(out_root, 'all_counts.csv'), index=False)
+
+    zip_path = shutil.make_archive(out_root, 'zip', out_root)
+    try:
+        from google.colab import files
+        shutil.copy(zip_path, '/content/drive/MyDrive/wax_results.zip')      # backup in Drive
+        files.download(zip_path)
+    except Exception as e:
+        print('zip saved at', zip_path, '-', e)
+    return counts
+
+
 if __name__ == '__main__':
     import sys
     pdf = sys.argv[1]
